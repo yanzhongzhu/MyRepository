@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>test 表数据对话查询</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --border:#e3e6ea;
+    --text:#1f2937; --muted:#6b7280;
+    --primary:#2563eb; --primary-soft:#eff4ff;
+    --user-bubble:#2563eb; --user-text:#ffffff;
+    --ok:#16a34a; --err:#dc2626;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column;
+  }
+  header{
+    background:var(--panel); border-bottom:1px solid var(--border);
+    padding:14px 22px; display:flex; align-items:center; gap:12px; flex-shrink:0;
+  }
+  header h1{font-size:17px; font-weight:600;}
+  header .sub{font-size:12px; color:var(--muted); margin-top:2px;}
+  .logo{
+    width:38px;height:38px;border-radius:10px;background:var(--primary);
+    color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+  }
+  .chips{
+    display:flex; gap:8px; padding:10px 22px; background:var(--panel);
+    border-bottom:1px solid var(--border); flex-wrap:wrap; flex-shrink:0;
+  }
+  .chip{
+    background:var(--primary-soft); color:var(--primary); border:1px solid #dbe7ff;
+    padding:6px 12px; border-radius:16px; font-size:12.5px; cursor:pointer; transition:.15s;
+  }
+  .chip:hover{background:#dde9ff;}
+  main{flex:1; overflow-y:auto; padding:20px 22px 10px;}
+  .msg{display:flex; margin-bottom:18px; gap:10px;}
+  .msg .avatar{width:32px;height:32px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .msg.user{flex-direction:row-reverse;}
+  .msg.user .avatar{background:var(--primary); color:#fff;}
+  .msg.bot .avatar{background:#f0f1f3; color:#333; border:1px solid var(--border);}
+  .bubble{
+    max-width:78%; padding:11px 14px; border-radius:12px; font-size:14px; line-height:1.7; word-break:break-word;
+  }
+  .msg.user .bubble{background:var(--user-bubble); color:var(--user-text); border-top-right-radius:4px;}
+  .msg.bot .bubble{background:var(--panel); border:1px solid var(--border); border-top-left-radius:4px;}
+  pre.sql{
+    background:#0f172a; color:#e2e8f0; padding:10px 12px; border-radius:8px;
+    font-size:12.5px; overflow-x:auto; margin:8px 0; font-family:Consolas,Menlo,monospace; white-space:pre-wrap;
+  }
+  .sql-label{font-size:11px; color:var(--muted); margin-top:6px;}
+  .meta{font-size:12px; color:var(--muted); margin:6px 0 2px;}
+  .meta.ok{color:var(--ok);} .meta.err{color:var(--err);}
+  table.dt{border-collapse:collapse; width:100%; margin:6px 0; font-size:12.5px; background:#fff;}
+  table.dt th, table.dt td{border:1px solid var(--border); padding:6px 9px; text-align:left; white-space:nowrap;}
+  table.dt thead th{background:#f8fafc; font-weight:600; position:sticky; top:0;}
+  .table-wrap{max-height:380px; overflow:auto; border:1px solid var(--border); border-radius:8px;}
+  .typing{display:flex; gap:5px; align-items:center; padding:4px 2px;}
+  .typing span{width:7px;height:7px;border-radius:50%;background:#b6c2d1;animation:bl 1s infinite;}
+  .typing span:nth-child(2){animation-delay:.2s;} .typing span:nth-child(3){animation-delay:.4s;}
+  @keyframes bl{0%,80%,100%{opacity:.3}40%{opacity:1}}
+  footer{flex-shrink:0; background:var(--panel); border-top:1px solid var(--border); padding:12px 22px;}
+  .inputbar{display:flex; gap:10px; align-items:center;}
+  textarea{
+    flex:1; resize:none; border:1px solid var(--border); border-radius:10px;
+    padding:11px 14px; font-size:14px; font-family:inherit; outline:none; height:46px; line-height:1.5;
+  }
+  textarea:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+  button.send{
+    background:var(--primary); color:#fff; border:none; border-radius:10px; padding:0 22px;
+    height:46px; font-size:14px; cursor:pointer; flex-shrink:0; transition:.15s;
+  }
+  button.send:disabled{opacity:.55; cursor:not-allowed;}
+  .empty-hint{text-align:center; color:var(--muted); margin-top:60px; font-size:14px;}
+  .empty-hint .big{font-size:30px; display:block; margin-bottom:12px;}
+  ::-webkit-scrollbar{width:8px;height:8px;} ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px;}
+  /* 管理员弹窗 */
+  .admin-btn{
+    margin-left:auto; background:transparent; border:1px solid var(--border); color:var(--muted);
+    padding:7px 12px; border-radius:8px; font-size:13px; cursor:pointer; flex-shrink:0; transition:.15s;
+  }
+  .admin-btn:hover{color:var(--primary); border-color:var(--primary); background:var(--primary-soft);}
+  .modal-mask{
+    position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:center;
+    justify-content:center; z-index:50; padding:20px;
+  }
+  .modal-mask.show{display:flex;}
+  .modal{
+    background:#fff; border-radius:14px; width:100%; max-width:460px; padding:24px;
+    box-shadow:0 20px 50px rgba(0,0,0,.2);
+  }
+  .modal h3{font-size:16px; margin-bottom:16px; display:flex; align-items:center; gap:8px;}
+  .modal .close{ margin-left:auto; cursor:pointer; color:var(--muted); font-size:20px; line-height:1; background:none;border:none;}
+  .modal label{font-size:12.5px; color:var(--muted); display:block; margin:12px 0 5px;}
+  .modal input{
+    width:100%; border:1px solid var(--border); border-radius:8px; padding:10px 12px;
+    font-size:13.5px; outline:none;
+  }
+  .modal input:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+  .modal .btn{
+    margin-top:16px; width:100%; background:var(--primary); color:#fff; border:none;
+    border-radius:8px; padding:11px; font-size:14px; cursor:pointer;
+  }
+  .modal .btn:disabled{opacity:.55; cursor:not-allowed;}
+  .row-status{font-size:13px; margin-top:10px; display:flex; align-items:center; gap:8px;}
+  .dot{width:9px;height:9px;border-radius:50%; display:inline-block;}
+  .dot.ok{background:var(--ok);} .dot.off{background:#f59e0b;}
+  .hint{font-size:12px; color:var(--muted); margin-top:8px; line-height:1.6;}
+  .admin-msg{font-size:12.5px; margin-top:10px; min-height:18px;}
+  .admin-msg.ok{color:var(--ok);} .admin-msg.err{color:var(--err);}
+  .chart-box{width:100%; height:320px; margin:8px 0; border:1px solid var(--border); border-radius:8px; background:#fff;}
+</style>
+<script src="/static/echarts.min.js"></script>
+</head>
+<body>
+<header>
+  <div class="logo">🛢️</div>
+  <div>
+    <h1>test 表数据 · 大模型对话查询</h1>
+    <div class="sub">用自然语言提问，AI 生成 SQL 实时查询数据库</div>
+  </div>
+  <button class="admin-btn" id="adminBtn">🔑 管理员</button>
+</header>
+
+<div class="chips" id="chips">
+  <div class="chip" data-q="这个表里有几条运单数据？">共多少条数据？</div>
+  <div class="chip" data-q="统计各项目分别有多少条运单">各项目运单数量</div>
+  <div class="chip" data-q="查出去往西安市的运单，显示项目、运单号、发货仓库、目的地城市和车牌号">去西安的运单</div>
+  <div class="chip" data-q="按月份统计 2025 年每个月的运单数量">2025年每月运单数</div>
+  <div class="chip" data-q="查询重量大于20的运单，按重量从大到小排，显示前10条">重量>20 的运单</div>
+</div>
+
+<main id="main">
+  <div class="empty-hint" id="emptyHint">
+    <span class="big">💬</span>
+    直接在下方输入你的数据问题，例如：<br>
+    "查一下去往西安市的运单有哪些"、"统计各项目的运单数量"
+  </div>
+</main>
+
+<footer>
+  <div class="inputbar">
+    <textarea id="input" placeholder="输入你的数据查询问题，例如：查询去济南市的运单…" rows="1"></textarea>
+    <button class="send" id="sendBtn">发送</button>
+  </div>
+</footer>
+
+<!-- 管理员弹窗 -->
+<div class="modal-mask" id="adminModal">
+  <div class="modal">
+    <h3>🔑 管理员设置
+      <button class="close" id="modalClose">×</button>
+    </h3>
+
+    <!-- 登录视图 -->
+    <div id="loginView">
+      <label>管理员密码</label>
+      <input type="password" id="adminPwd" placeholder="输入管理员密码" autocomplete="off">
+      <button class="btn" id="loginBtn">登录</button>
+      <div class="hint">初始密码见服务器 /opt/chat-test-db/config.json 中 admin.password，登录后请及时修改。</div>
+      <div class="admin-msg" id="loginMsg"></div>
+    </div>
+
+    <!-- 管理视图 -->
+    <div id="mgrView" style="display:none;">
+      <div class="row-status"><span class="dot" id="keyDot"></span><span id="dbDot"></span></div>
+      <div class="admin-msg" id="statusText" style="color:var(--muted); margin-top:2px;"></div>
+
+      <label>DeepSeek 接口地址 (Base URL)</label>
+      <input type="text" id="dsBase" placeholder="https://api.deepseek.com" autocomplete="off">
+
+      <label>DeepSeek API Key</label>
+      <input type="password" id="dsKey" placeholder="粘贴 DeepSeek API Key (sk-...)" autocomplete="off">
+
+      <label>模型名称</label>
+      <input type="text" id="dsModel" placeholder="deepseek-chat" autocomplete="off">
+
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button class="btn" id="saveKeyBtn" style="flex:1;">保存配置</button>
+        <button class="btn" id="testKeyBtn" style="flex:1; background:#0891b2;">测试连接</button>
+      </div>
+
+      <label>修改管理员密码（可选）</label>
+      <input type="password" id="newPwd" placeholder="设置新的管理员密码（≥6位）" autocomplete="off">
+      <button class="btn" id="savePwdBtn" style="background:#64748b;">修改密码</button>
+
+      <button class="btn" id="logoutBtn" style="background:#fff; color:var(--muted); border:1px solid var(--border); margin-top:12px;">退出登录</button>
+      <div class="admin-msg" id="mgrMsg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const main = document.getElementById('main');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const emptyHint = document.getElementById('emptyHint');
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function addMsg(role, html){
+  if(emptyHint) emptyHint.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + (role==='user'?'user':'bot');
+  const av = role==='user' ? '🧑' : '🤖';
+  wrap.innerHTML = '<div class="avatar">'+av+'</div><div class="bubble">'+html+'</div>';
+  main.appendChild(wrap);
+  main.scrollTop = main.scrollHeight;
+  return wrap;
+}
+
+function renderResult(r){
+  let html = '';
+  const meta = '<div class="meta ok">✅ 查询成功 · 返回 '+r.row_count+' 行'+(r.truncated?'（已截断）':'')+'</div>'
+    + '<div class="sql-label">生成的 SQL：</div><pre class="sql">'+esc(r.sql)+'</pre>';
+  html += meta;
+  // 图表容器（如果大模型建议画图）
+  if(r.chart && r.rows.length){
+    html += '<div class="chart-box"></div>';
+  }
+  if(r.columns && r.rows.length){
+    const head = r.columns.map(c=>'<th>'+esc(c)+'</th>').join('');
+    const body = r.rows.map(row=>'<tr>'+row.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('');
+    html += '<div class="table-wrap"><table class="dt"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+  } else {
+    html += '<div class="meta">（没有返回数据）</div>';
+  }
+  return { html: html, chart: r.chart || null, columns: r.columns||[], rows: r.rows||[] };
+}
+
+function chartColors(n){
+  const pal = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
+  return pal.slice(0, n);
+}
+
+function initChart(box, chart, columns, rows){
+  if(typeof echarts === 'undefined') return;
+  const _c = echarts.init(box);
+  const xi = columns.indexOf(chart.x);
+  const yi = columns.indexOf(chart.y);
+  const cats = rows.map(r=> String(r[xi] === null || r[xi] === undefined ? '' : r[xi]));
+  const vals = rows.map(r=> {
+    const v = Number(r[yi]); return isNaN(v) ? 0 : v;
+  });
+  const title = chart.title || '数据图表';
+  let option;
+  if(chart.type === 'pie'){
+    option = {
+      title:{text:title, left:'center', textStyle:{fontSize:15}},
+      tooltip:{trigger:'item', formatter:'{b}: {c} ({d}%)'},
+      legend:{bottom:0, type:'scroll'},
+      color: chartColors(cats.length),
+      series:[{type:'pie', radius:'58%', center:['50%','46%'],
+        data: cats.map((c,i)=>({name:c, value:vals[i]}))}]
+    };
+  } else if(chart.type === 'line'){
+    option = {
+      title:{text:title, left:'center', textStyle:{fontSize:15}},
+      tooltip:{trigger:'axis'},
+      grid:{left:48, right:24, top:44, bottom:48},
+      xAxis:{type:'category', data:cats, axisLabel:{interval:0, rotate: cats.length>8?35:0}},
+      yAxis:{type:'value'},
+      series:[{type:'line', data:vals, smooth:true, areaStyle:{opacity:.12}, itemStyle:{color:'#3b82f6'}}]
+    };
+  } else { // bar
+    option = {
+      title:{text:title, left:'center', textStyle:{fontSize:15}},
+      tooltip:{trigger:'axis', axisPointer:{type:'shadow'}},
+      grid:{left:48, right:24, top:44, bottom:48},
+      xAxis:{type:'category', data:cats, axisLabel:{interval:0, rotate: cats.length>8?35:0}},
+      yAxis:{type:'value'},
+      color: chartColors(1),
+      series:[{type:'bar', data:vals, barMaxWidth:44}]
+    };
+  }
+  _c.setOption(option);
+  window.addEventListener('resize', ()=>_c.resize());
+}
+
+function addTyping(){
+  if(emptyHint) emptyHint.remove();
+  const wrap = document.createElement('div');
+  wrap.className='msg bot'; wrap.id='typingMsg';
+  wrap.innerHTML = '<div class="avatar">🤖</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+  main.appendChild(wrap); main.scrollTop = main.scrollHeight;
+}
+
+function send(question){
+  question = (question||'').trim();
+  if(!question) return;
+  addMsg('user', esc(question));
+  input.value='';
+  addTyping();
+  sendBtn.disabled = true;
+
+  fetch('/api/chat',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({message: question})
+  })
+  .then(res=>res.json())
+  .then(r=>{
+    document.getElementById('typingMsg')?.remove();
+    if(!r.ok){
+      addMsg('bot','<div class="meta err">❌ '+esc(r.error)+'</div>'+(r.sql?'<div class="sql-label">AI 生成的 SQL：</div><pre class="sql">'+esc(r.sql)+'</pre>':''));
+    } else if(r.no_query){
+      addMsg('bot','<div class="meta">🤔 '+esc(r.reply)+'</div>');
+    } else {
+      const res = renderResult(r);
+      const wrap = addMsg('bot', res.html);
+      if(res.chart && res.rows.length){
+        const box = wrap.querySelector('.chart-box');
+        if(box) initChart(box, res.chart, res.columns, res.rows);
+      }
+    }
+  })
+  .catch(e=>{
+    document.getElementById('typingMsg')?.remove();
+    addMsg('bot','<div class="meta err">❌ 请求出错：'+esc(e.message)+'</div>');
+  })
+  .finally(()=>{ sendBtn.disabled=false; });
+}
+
+sendBtn.addEventListener('click', ()=>send(input.value));
+input.addEventListener('keydown', e=>{
+  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(input.value); }
+});
+document.querySelectorAll('.chip').forEach(c=>{
+  c.addEventListener('click', ()=>send(c.dataset.q));
+});
+
+/* ========== 管理员功能 ========== */
+const adminModal = document.getElementById('adminModal');
+const loginView = document.getElementById('loginView');
+const mgrView = document.getElementById('mgrView');
+let adminToken = localStorage.getItem('chatdb_admin_token') || '';
+let adminMsgEl;
+
+function adminMsg(id, text, kind){
+  const el = document.getElementById(id);
+  el.textContent = text||'';
+  el.className = 'admin-msg ' + (kind||'');
+}
+
+function showLogin(){ loginView.style.display='block'; mgrView.style.display='none'; }
+function showMgr(){ loginView.style.display='none'; mgrView.style.display='block'; }
+
+document.getElementById('adminBtn').addEventListener('click', async ()=>{
+  adminModal.classList.add('show');
+  document.getElementById('adminPwd').value='';
+  adminMsg('loginMsg','',''); adminMsg('mgrMsg','','');
+  if(adminToken){
+    // 尝试恢复会话
+    const ok = await refreshStatus();
+    if(ok) showMgr(); else showLogin();
+  } else showLogin();
+});
+document.getElementById('modalClose').addEventListener('click', ()=>adminModal.classList.remove('show'));
+adminModal.addEventListener('click', e=>{ if(e.target===adminModal) adminModal.classList.remove('show'); });
+
+async function refreshStatus(){
+  try{
+    const r = await fetch('/api/admin/status', {headers:{'X-Admin-Token':adminToken}});
+    const d = await r.json();
+    if(!d.ok){ adminToken=''; localStorage.removeItem('chatdb_admin_token'); return false; }
+    const keyDot = document.getElementById('keyDot');
+    keyDot.className = 'dot ' + (d.deepseek_configured?'ok':'off');
+    const dbDot = document.getElementById('dbDot');
+    dbDot.className = 'dot ' + (d.db_ok?'ok':'off');
+    if(d.base_url) document.getElementById('dsBase').value = d.base_url;
+    if(d.model) document.getElementById('dsModel').value = d.model;
+    document.getElementById('statusText').textContent =
+      'DeepSeek: ' + (d.deepseek_configured ? ('已配置 ' + d.deepseek_mask) : '未配置 Key') +
+      '  ·  数据库: ' + (d.db_ok?'连接正常':'连接失败') +
+      '  ·  可查询表: '+ d.allowed_tables.join(', ');
+    return true;
+  }catch(e){ return false; }
+}
+
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const pwd = document.getElementById('adminPwd').value.trim();
+  if(!pwd){ adminMsg('loginMsg','请输入管理员密码','err'); return; }
+  adminMsg('loginMsg','登录中…','');
+  try{
+    const r = await fetch('/api/admin/login',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({password:pwd})
+    });
+    const d = await r.json();
+    if(!d.ok){ adminMsg('loginMsg', d.error||'登录失败', 'err'); return; }
+    adminToken = d.token;
+    localStorage.setItem('chatdb_admin_token', adminToken);
+    adminMsg('loginMsg','','');
+    await refreshStatus();
+    showMgr();
+    adminMsg('mgrMsg','登录成功，钥匙已生效 '+d.ttl_hours+' 小时','ok');
+  }catch(e){ adminMsg('loginMsg','网络错误','err'); }
+});
+
+document.getElementById('saveKeyBtn').addEventListener('click', async ()=>{
+  const base = document.getElementById('dsBase').value.trim();
+  const key = document.getElementById('dsKey').value.trim();
+  const model = document.getElementById('dsModel').value.trim();
+  if(!base){ adminMsg('mgrMsg','接口地址不能为空','err'); return; }
+  if(!key){ adminMsg('mgrMsg','请输入 API Key','err'); return; }
+  if(!model){ adminMsg('mgrMsg','模型名称不能为空','err'); return; }
+  adminMsg('mgrMsg','保存中…','');
+  try{
+    const r = await fetch('/api/admin/set-deepseek-config',{
+      method:'POST', headers:{'Content-Type':'application/json','X-Admin-Token':adminToken},
+      body: JSON.stringify({base_url:base, api_key:key, model:model})
+    });
+    const d = await r.json();
+    if(!d.ok){ adminMsg('mgrMsg', d.error||'保存失败','err'); return; }
+    adminMsg('mgrMsg','✅ 已保存并生效：接口 '+d.base_url+' · 模型 '+d.model+' · Key '+d.deepseek_mask, 'ok');
+    await refreshStatus();
+  }catch(e){ adminMsg('mgrMsg','网络错误','err'); }
+});
+
+document.getElementById('testKeyBtn').addEventListener('click', async ()=>{
+  adminMsg('mgrMsg','正在测试连接…','');
+  try{
+    const r = await fetch('/api/admin/test-deepseek',{
+      method:'POST', headers:{'X-Admin-Token':adminToken}
+    });
+    const d = await r.json();
+    if(d.ok){ adminMsg('mgrMsg','✅ '+d.message,'ok'); }
+    else{ adminMsg('mgrMsg','❌ '+d.error,'err'); }
+  }catch(e){ adminMsg('mgrMsg','网络错误','err'); }
+});
+
+document.getElementById('savePwdBtn').addEventListener('click', async ()=>{
+  const np = document.getElementById('newPwd').value.trim();
+  if(!np){ adminMsg('mgrMsg','请输入新密码','err'); return; }
+  adminMsg('mgrMsg','修改中…','');
+  try{
+    const r = await fetch('/api/admin/set-password',{
+      method:'POST', headers:{'Content-Type':'application/json','X-Admin-Token':adminToken},
+      body: JSON.stringify({new_password:np})
+    });
+    const d = await r.json();
+    if(!d.ok){ adminMsg('mgrMsg', d.error||'修改失败','err'); return; }
+    document.getElementById('newPwd').value='';
+    adminMsg('mgrMsg','✅ 管理员密码已更新','ok');
+  }catch(e){ adminMsg('mgrMsg','网络错误','err'); }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  try{ await fetch('/api/admin/logout',{method:'POST',headers:{'X-Admin-Token':adminToken}}); }catch(e){}
+  adminToken=''; localStorage.removeItem('chatdb_admin_token');
+  showLogin(); adminMsg('loginMsg','已退出登录','ok');
+});
+</script>
+</body>
+</html>

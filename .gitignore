@@ -1,0 +1,14 @@
+# === 密钥/敏感配置：绝不入库 ===
+config.json
+deploy.py
+
+# === 运行时产物 ===
+backups/
+*.log
+nohup.log
+__pycache__/
+*.pyc
+.current_version
+
+# === 系统 ===
+.DS_Store
