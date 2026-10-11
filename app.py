@@ -22,6 +22,9 @@ logger = logging.getLogger("chat-test-db")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
+# 应用版本号：用于验证 git 部署是否生效（git-pull 后此值应更新）
+APP_VERSION = "v2.0"
+
 # 管理员会话：token -> 过期时间戳（纯内存，重启即失效，可重新登录）
 _ADMIN_SESSIONS = {}
 
@@ -266,7 +269,7 @@ def api_info():
             info.append({"table": t, "desc": describe_table(t)})
         except Exception as e:
             info.append({"table": t, "desc": "读取失败: %s" % e})
-    return jsonify({"ok": True, "tables": info})
+    return jsonify({"ok": True, "version": APP_VERSION, "tables": info})
 
 
 def parse_chart_config(text):
