@@ -84,6 +84,25 @@
   .footer{text-align:center;color:var(--text-3);font-size:12px;padding:14px 0 30px;}
   /* 最佳排序标记 */
   .best-row td{background:#f0fdf4 !important;}
+  /* 装箱可视化预览 */
+  .viz-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+  .viz-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-2);}
+  .viz-legend .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+  .viz-list{display:flex;flex-direction:column;gap:10px;max-height:560px;overflow:auto;padding-right:4px;}
+  .viz-row{display:flex;align-items:stretch;gap:12px;background:#fbfcfe;border:1px solid var(--border);border-radius:10px;padding:10px 14px;transition:border-color .2s;}
+  .viz-row:hover{border-color:var(--primary);}
+  .viz-no{flex:0 0 34px;font-size:19px;font-weight:700;color:var(--primary);opacity:.85;text-align:center;align-self:center;}
+  .viz-body{flex:1;min-width:0;}
+  .viz-title{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px;gap:10px;flex-wrap:wrap;}
+  .viz-title .c{font-weight:600;color:var(--text);}
+  .viz-box{display:flex;height:30px;border-radius:6px;overflow:hidden;border:1px solid #cbd5e1;background:#eef2f7;}
+  .viz-seg{height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;white-space:nowrap;min-width:0;overflow:hidden;transition:width .5s ease;}
+  .viz-meta{display:flex;justify-content:space-between;font-size:11.5px;color:var(--text-3);margin-top:5px;gap:10px;flex-wrap:wrap;}
+  .viz-meta b{color:var(--text-2);font-weight:600;}
+  .viz-empty-tip{color:var(--text-3);text-align:center;padding:16px;font-size:13px;}
+  .viz-load-more{display:none;width:100%;margin-top:12px;padding:9px;border:1px dashed var(--border);border-radius:8px;background:#fafbfc;color:var(--text-2);cursor:pointer;font-size:13px;transition:background .2s;}
+  .viz-load-more:hover{background:var(--primary-light);border-color:var(--primary);color:var(--primary);}
+  .viz-load-more.show{display:block;}
 </style>
 </head>
 <body>
@@ -94,7 +113,7 @@
       <h1>🚢 郎酒水运装箱 · 集装箱装载优化</h1>
       <div class="sub">遍历 24 种优先级组合，自动选择剩余货品最少的装载方案</div>
     </div>
-    <span class="badge">Web 版 V1.0 · 支持数据编辑与结果导出</span>
+    <span class="badge">Web 版 V1.1 · 新增装箱可视化预览</span>
   </div>
 
   <!-- 参数设置 -->
@@ -140,6 +159,18 @@
   <!-- 结果 -->
   <div id="resultArea" class="hidden">
     <div class="summary" id="summaryCards"></div>
+
+    <!-- 装箱可视化预览 -->
+    <div class="card" id="vizCard">
+      <h2>📦 装箱结果预览（逐柜视图）</h2>
+      <div class="viz-toolbar">
+        <div class="viz-legend" id="vizLegend"></div>
+        <span id="vizCount" style="font-size:12px;color:var(--text-3);"></span>
+      </div>
+      <div class="viz-list" id="vizList"></div>
+      <button class="viz-load-more" id="vizLoadMore">加载更多集装箱 ↓</button>
+    </div>
+
     <div class="card">
       <div class="tabs">
         <div class="tab active" data-tab="tabBest">最佳装载方案</div>
@@ -169,6 +200,11 @@
     schemes: [],          // 24 个方案结果
     best: null            // 最优方案
   };
+  var autoRunTimer = null;
+
+  /* 货品渲染颜色（按顺序轮转，最多用到 8 色） */
+  var VIZ_COLORS = ['#2563eb','#059669','#d97706','#db2777','#7c3aed','#0891b2','#dc2626','#65a30d'];
+  function vizColor(idx){ return VIZ_COLORS[idx % VIZ_COLORS.length]; }
 
   /* ========== 上传 ========== */
   var drop = $('dropZone'), dropText = $('dropText'), fileInput = null;
@@ -262,6 +298,11 @@
     renderPreview();
     $('btnRun').disabled = false;
     hideResult();
+    // 数据就绪后自动计算一次，页面直接呈现结果预览
+    clearTimeout(autoRunTimer);
+    autoRunTimer = setTimeout(function(){
+      if (state.items) runOptimize();
+    }, 300);
   }
 
   function renderPreview(){
@@ -356,6 +397,7 @@
     $('btnDownload').disabled = false;
     renderResult(wl, vl, rate);
     $('progressWrap').classList.remove('show');
+    document.getElementById('resultArea').scrollIntoView({ behavior:'smooth', block:'start' });
   }
 
   function nextFrame(){ return new Promise(function(r){ setTimeout(r, 0); }); }
@@ -379,8 +421,91 @@
     renderBestTable(b, state.schemes, wl);
     renderCompareTable(state.schemes, b);
     renderRemainTable(b);
+    renderVizPreview(b, wl, vl);
     $('resultArea').classList.remove('hidden');
   }
+
+  /* ========== 装箱可视化预览 ========== */
+  var vizShown = 12;   // 默认展示柜数
+  var vizListAll = [];
+
+  function renderVizPreview(b, wl, vl){
+    vizListAll = b.results;
+    vizShown = Math.min(12, vizListAll.length);
+
+    // 图例：每种货品一个色块
+    var legend = state.items.map(function(it, i){
+      return '<span><span class="dot" style="background:' + vizColor(i) + '"></span>' + esc(it.name) + '</span>';
+    }).join('');
+    $('vizLegend').innerHTML = legend;
+    $('vizCount').textContent = '共 ' + vizListAll.length + ' 个集装箱';
+
+    var frag = '';
+    for (var i = 0; i < vizShown; i++) frag += vizRowHtml(vizListAll[i], i, wl);
+    $('vizList').innerHTML = frag;
+    var more = $('vizLoadMore');
+    if (vizListAll.length > vizShown){
+      more.classList.add('show');
+      more.textContent = '加载更多集装箱（已显示 ' + vizShown + ' / ' + vizListAll.length + '）↓';
+    } else {
+      more.classList.remove('show');
+    }
+  }
+
+  function vizRowHtml(r, i, wl){
+    var idx1 = r[0][0], cnt1 = r[0][1], idx2 = r[1][0], cnt2 = r[1][1];
+    var n1 = state.items[idx1] || {};
+    var n2 = cnt2 > 0 ? (state.items[idx2] || {}) : null;
+    var w1 = cnt1 * (n1.weight || 0);
+    var w2 = cnt2 > 0 ? cnt2 * (n2.weight || 0) : 0;
+    var totalW = w1 + w2;
+    var pct = Math.min(totalW / wl * 100, 100);   // 重量占用率
+    var seg1 = pct > 0 ? Math.max(w1 / wl * 100, 0) : 0;
+    var seg2 = pct > 0 ? Math.max(w2 / wl * 100, 0) : 0;
+    // 空余段
+    var empty = Math.max(100 - seg1 - seg2, 0);
+
+    var segHtml = '';
+    if (seg1 > 0){
+      segHtml += '<div class="viz-seg" style="background:' + vizColor(idx1) + ';width:' + seg1 + '%;" title="' + esc(n1.name) + ' × ' + fmt(cnt1) + ' 件">' + (seg1 > 8 ? esc(n1.name) : '') + '</div>';
+    }
+    if (seg2 > 0){
+      segHtml += '<div class="viz-seg" style="background:' + vizColor(idx2) + ';width:' + seg2 + '%;" title="' + esc(n2.name) + ' × ' + fmt(cnt2) + ' 件">' + (seg2 > 8 ? esc(n2.name) : '') + '</div>';
+    }
+    if (empty > 1){
+      segHtml += '<div class="viz-seg" style="background:#eef1f7;width:' + empty + '%;" title="剩余空间 ' + empty.toFixed(1) + '%"></div>';
+    }
+
+    var comboTag = r[4] || (esc(n1.name) + (cnt2 > 0 ? '+' + esc(n2.name) : ''));
+    return '<div class="viz-row">' +
+      '<div class="viz-no">' + (i + 1) + '</div>' +
+      '<div class="viz-body">' +
+        '<div class="viz-title">' +
+          '<span class="c">' + esc(comboTag) + '</span>' +
+          '<span>共 <b>' + fmt(cnt1 + cnt2) + '</b> 件</span>' +
+        '</div>' +
+        '<div class="viz-box">' + segHtml + '</div>' +
+        '<div class="viz-meta">' +
+          '<span>重量 <b>' + totalW.toFixed(2) + '</b> / ' + wl + ' 吨</span>' +
+          '<span>体积 <b>' + r[3].toFixed(2) + '</b> m³</span>' +
+          '<span>满载率 <b>' + pct.toFixed(1) + '%</b></span>' +
+        '</div>' +
+      '</div></div>';
+  }
+
+  $('vizLoadMore').addEventListener('click', function(){
+    var more = state.best && state.best.results ? state.best.results : [];
+    vizShown = Math.min(vizShown + 12, more.length);
+    var frag = '';
+    for (var i = 0; i < vizShown; i++) frag += vizRowHtml(more[i], i, parseFloat($('inpWeight').value) || 27);
+    $('vizList').innerHTML = frag;
+    if (vizShown >= more.length){
+      this.classList.remove('show');
+      this.textContent = '已全部加载（' + more.length + ' 柜）';
+    } else {
+      this.textContent = '加载更多集装箱（已显示 ' + vizShown + ' / ' + more.length + '）↓';
+    }
+  });
 
   function renderBestTable(b, schemes, wl){
     var rows = b.results.map(function(r, i){
