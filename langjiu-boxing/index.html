@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>郎酒水运装箱 · 集装箱装载优化</title>
+<style>
+  :root{
+    --primary:#2563eb; --primary-dark:#1d4ed8; --primary-light:#eff6ff;
+    --success:#16a34a; --success-bg:#f0fdf4;
+    --warn:#d97706; --warn-bg:#fffbeb; --danger:#dc2626; --danger-bg:#fef2f2;
+    --bg:#f1f5f9; --card:#ffffff; --border:#e2e8f0;
+    --text:#0f172a; --text-2:#475569; --text-3:#94a3b8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.6;}
+  .page{max-width:1180px;margin:0 auto;padding:24px;}
+  /* 头部 */
+  .header{background:linear-gradient(135deg,#1e3a8a,#2563eb 60%,#0ea5e9);color:#fff;border-radius:12px;padding:24px 28px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .header h1{font-size:21px;font-weight:700;display:flex;align-items:center;gap:10px;}
+  .header .sub{font-size:13px;opacity:.9;margin-top:4px;}
+  .header .badge{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:4px 14px;font-size:12px;}
+  /* 卡片 */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px;}
+  .card h2{font-size:15px;color:var(--primary-dark);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  /* 参数 */
+  .params{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+  .param label{display:block;font-size:13px;color:var(--text-2);margin-bottom:6px;}
+  .param input{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:15px;outline:none;transition:border .2s;}
+  .param input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+  .param .unit{font-size:12px;color:var(--text-3);}
+  /* 上传区 */
+  .drop{border:2px dashed #cbd5e1;border-radius:10px;padding:26px;text-align:center;color:var(--text-2);cursor:pointer;transition:all .2s;background:#fafbfc;}
+  .drop:hover,.drop.over{border-color:var(--primary);background:var(--primary-light);}
+  .drop .icon{font-size:34px;margin-bottom:6px;}
+  .drop.loaded{border-style:solid;border-color:var(--success);background:var(--success-bg);color:#166534;}
+  /* 按钮 */
+  .btn{border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s;color:#fff;}
+  .btn-primary{background:var(--primary);}
+  .btn-primary:hover{background:var(--primary-dark);}
+  .btn-primary:disabled{background:#93c5fd;cursor:not-allowed;}
+  .btn-success{background:var(--success);}
+  .btn-success:hover{background:#15803d;}
+  .btn-success:disabled{background:#86efac;cursor:not-allowed;}
+  .btn-ghost{background:#f1f5f9;color:var(--text-2);border:1px solid var(--border);}
+  .btn-ghost:hover{background:#e2e8f0;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px;}
+  /* 表格 */
+  .table-wrap{overflow:auto;max-height:420px;border:1px solid var(--border);border-radius:8px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;}
+  thead th{position:sticky;top:0;background:#1e40af;color:#fff;padding:9px 12px;text-align:left;font-weight:600;white-space:nowrap;z-index:1;}
+  tbody td{padding:7px 12px;border-top:1px solid var(--border);white-space:nowrap;}
+  tbody tr:nth-child(even){background:#f8fafc;}
+  tbody tr:hover{background:var(--primary-light);}
+  .editable input{width:120px;padding:5px 8px;border:1px solid var(--primary);border-radius:6px;font-size:13px;outline:none;}
+  .editable input:focus{box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+  .num{text-align:right;font-variant-numeric:tabular-nums;}
+  /* Tab */
+  .tabs{display:flex;gap:6px;border-bottom:2px solid var(--border);margin-bottom:14px;}
+  .tab{padding:9px 18px;cursor:pointer;border-radius:8px 8px 0 0;color:var(--text-2);font-weight:500;border-bottom:2px solid transparent;margin-bottom:-2px;}
+  .tab:hover{color:var(--primary);}
+  .tab.active{color:var(--primary-dark);border-bottom-color:var(--primary);background:var(--primary-light);}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+  /* 摘要 */
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
+  .sum-card{background:linear-gradient(135deg,#f8fafc,#eef2ff);border:1px solid #e0e7ff;border-radius:10px;padding:14px 16px;text-align:center;}
+  .sum-card .k{font-size:12px;color:var(--text-2);}
+  .sum-card .v{font-size:22px;font-weight:700;color:var(--primary-dark);margin-top:4px;font-variant-numeric:tabular-nums;}
+  .sum-card.best{border-color:var(--success);background:var(--success-bg);}
+  .sum-card.best .v{color:var(--success);font-size:15px;word-break:break-all;}
+  /* 进度 */
+  .progress-wrap{display:none;margin-bottom:14px;}
+  .progress-wrap.show{display:block;}
+  .bar{height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;}
+  .bar-fill{height:100%;width:0;background:linear-gradient(90deg,var(--primary),var(--cyan,#0ea5e9));border-radius:999px;transition:width .3s;}
+  .progress-text{font-size:12.5px;color:var(--text-2);margin-top:6px;display:flex;justify-content:space-between;}
+  /* 提示 */
+  .note{border-radius:8px;padding:10px 14px;font-size:13px;margin-top:12px;border-left:4px solid;}
+  .note.info{background:var(--primary-light);border-color:var(--primary);color:#1e3a8a;}
+  .note.warn{background:var(--warn-bg);border-color:var(--warn);color:#92400e;}
+  .note.danger{background:var(--danger-bg);border-color:var(--danger);color:#991b1b;}
+  .hidden{display:none !important;}
+  .footer{text-align:center;color:var(--text-3);font-size:12px;padding:14px 0 30px;}
+  /* 最佳排序标记 */
+  .best-row td{background:#f0fdf4 !important;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div>
+      <h1>🚢 郎酒水运装箱 · 集装箱装载优化</h1>
+      <div class="sub">遍历 24 种优先级组合，自动选择剩余货品最少的装载方案</div>
+    </div>
+    <span class="badge">Web 版 V1.0 · 支持数据编辑与结果导出</span>
+  </div>
+
+  <!-- 参数设置 -->
+  <div class="card">
+    <h2>⚙️ 参数设置</h2>
+    <div class="params">
+      <div class="param">
+        <label>重量限制 <span class="unit">(吨)</span></label>
+        <input type="number" id="inpWeight" value="27" min="1" max="100" step="0.5">
+      </div>
+      <div class="param">
+        <label>体积限制 <span class="unit">(m³)</span></label>
+        <input type="number" id="inpVolume" value="64" min="1" max="200" step="1">
+      </div>
+      <div class="param">
+        <label>满载率要求 <span class="unit">(%)</span></label>
+        <input type="number" id="inpRate" value="99" min="1" max="100" step="1">
+      </div>
+    </div>
+    <div class="note info">💡 满载率要求越高，每柜装载越接近满载；若货量不足将无法成柜，剩余货品会保留在清单中。</div>
+  </div>
+
+  <!-- 上传 -->
+  <div class="card">
+    <h2>📂 上传货品数据</h2>
+    <div class="drop" id="dropZone">
+      <div class="icon">📄</div>
+      <div id="dropText">点击选择或拖拽 Excel 文件到此处（需包含：货品名称 / 单件重量 / 单件体积 / 总件数）</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="btnSample">载入样例数据</button>
+      <button class="btn btn-primary" id="btnRun" disabled>🚀 开始多方案优化（24 种方案）</button>
+      <button class="btn btn-success" id="btnDownload" disabled>📥 下载最佳结果 Excel</button>
+    </div>
+  </div>
+
+  <!-- 进度 -->
+  <div class="card progress-wrap" id="progressWrap">
+    <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+    <div class="progress-text"><span id="progressLabel">准备中...</span><span id="progressPct">0%</span></div>
+  </div>
+
+  <!-- 结果 -->
+  <div id="resultArea" class="hidden">
+    <div class="summary" id="summaryCards"></div>
+    <div class="card">
+      <div class="tabs">
+        <div class="tab active" data-tab="tabBest">最佳装载方案</div>
+        <div class="tab" data-tab="tabCompare">所有方案对比（24）</div>
+        <div class="tab" data-tab="tabRemain">剩余货品统计</div>
+      </div>
+      <div class="tab-panel active" id="tabBest"></div>
+      <div class="tab-panel" id="tabCompare"></div>
+      <div class="tab-panel" id="tabRemain"></div>
+    </div>
+  </div>
+
+  <div class="footer">郎酒水运装箱工具 · 算法与原版桌面工具一致（24 方案 × 9 策略）</div>
+</div>
+
+<script src="libs/xlsx.full.min.js"></script>
+<script src="core.js"></script>
+<script>
+(function(){
+  'use strict';
+  var $ = function(id){ return document.getElementById(id); };
+  var REQUIRED = ['货品名称','单件重量','单件体积','总件数'];
+
+  var state = {
+    items: null,          // 当前数据 [{name,weight,volume,count}]
+    fileName: '',
+    schemes: [],          // 24 个方案结果
+    best: null            // 最优方案
+  };
+
+  /* ========== 上传 ========== */
+  var drop = $('dropZone'), dropText = $('dropText'), fileInput = null;
+
+  drop.addEventListener('click', function(e){
+    if (e.target.tagName === 'BUTTON') return;
+    fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.xlsx,.xls,.csv';
+    fileInput.onchange = function(){ if(fileInput.files[0]) parseFile(fileInput.files[0]); };
+    fileInput.click();
+  });
+
+  ['dragenter','dragover'].forEach(function(ev){
+    drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function(e){
+    if (e.dataTransfer && e.dataTransfer.files[0]) parseFile(e.dataTransfer.files[0]);
+  });
+
+  $('btnSample').addEventListener('click', function(e){
+    e.stopPropagation();
+    state.items = [
+      { name:'T6',  weight:0.0095, volume:0.032, count:15000 },
+      { name:'T8',  weight:0.0099, volume:0.033, count:12000 },
+      { name:'顺品郎', weight:0.0129, volume:0.029, count:8000 },
+      { name:'小郎酒', weight:0.0076, volume:0.010, count:20000 }
+    ];
+    state.fileName = '样例数据（内置）';
+    activateData();
+  });
+
+  function parseFile(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      try {
+        var wb = XLSX.read(e.target.result, { type:'array' });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
+        if (!rows.length){ alert('文件中没有数据'); return; }
+
+        var headers = Object.keys(rows[0]);
+        var missing = REQUIRED.filter(function(c){ return headers.indexOf(c) < 0; });
+        if (missing.length){
+          drop.classList.remove('loaded'); drop.classList.add('warn');
+          dropText.innerHTML = '❌ 缺少必要列：<b>' + missing.join('、') + '</b><br>需要包含：货品名称 / 单件重量 / 单件体积 / 总件数';
+          return;
+        }
+
+        var items = rows.map(function(r){
+          return {
+            name: String(r['货品名称']).trim(),
+            weight: Number(r['单件重量']),
+            volume: Number(r['单件体积']),
+            count: parseInt(r['总件数'], 10)
+          };
+        });
+
+        var errs = [];
+        items.forEach(function(it, i){
+          if (!it.name) errs.push('第 ' + (i+1) + ' 行货品名称为空');
+          if (!(it.weight > 0)) errs.push('第 ' + (i+1) + ' 行单件重量必须大于 0');
+          if (!(it.volume > 0)) errs.push('第 ' + (i+1) + ' 行单件体积必须大于 0');
+          if (isNaN(it.count) || it.count < 0) errs.push('第 ' + (i+1) + ' 行总件数必须为非负整数');
+        });
+        if (errs.length){
+          alert('数据校验未通过：\n' + errs.slice(0, 8).join('\n'));
+          return;
+        }
+        if (items.length !== 4){
+          if (!confirm('当前数据 ' + items.length + ' 行（推荐 4 行：T6 / T8 / 顺品郎 / 小郎酒）。算法按数据行顺序匹配货品索引（第1行=T6、第2行=T8、第3行=顺品郎、第4行=小郎酒），继续吗？')) return;
+        }
+
+        state.items = items;
+        state.fileName = file.name;
+        activateData();
+      } catch(err){
+        alert('文件解析失败：' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  /* ========== 数据激活：渲染可编辑预览表 ========== */
+  function activateData(){
+    drop.classList.add('loaded');
+    dropText.innerHTML = '✅ 已加载：<b>' + state.fileName + '</b> （' + state.items.length + ' 个货品）<br>可双击下方表格的「总件数」列修改数量，再点「开始优化」使用新数据';
+    renderPreview();
+    $('btnRun').disabled = false;
+    hideResult();
+  }
+
+  function renderPreview(){
+    var wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    var html = '<table><thead><tr><th>#</th><th>货品名称</th><th>单件重量(吨)</th><th>单件体积(m³)</th><th>总件数（可编辑）</th></tr></thead><tbody>';
+    state.items.forEach(function(it, i){
+      html += '<tr><td>' + (i+1) + '</td><td><b>' + esc(it.name) + '</b></td>' +
+              '<td class="num">' + it.weight.toFixed(4) + '</td>' +
+              '<td class="num">' + it.volume.toFixed(3) + '</td>' +
+              '<td class="editable"><input type="number" min="0" step="1" data-idx="' + i + '" value="' + it.count + '"></td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+
+    var previewBox = document.createElement('div');
+    previewBox.className = 'card';
+    previewBox.innerHTML = '<h2>🔍 数据预览（编辑后点击「开始多方案优化」生效）</h2>';
+    previewBox.appendChild(wrap);
+    var legend = document.createElement('div');
+    legend.className = 'note warn';
+    legend.innerHTML = '⚠️ 货品顺序固定映射：第 1 行 = T6，第 2 行 = T8，第 3 行 = 顺品郎，第 4 行 = 小郎酒。组合装载策略按此顺序匹配。';
+    previewBox.appendChild(legend);
+
+    var prev = document.querySelector('#previewCard');
+    if (prev) prev.remove();
+    previewBox.id = 'previewCard';
+    $('progressWrap').parentNode.insertBefore(previewBox, $('progressWrap'));
+
+    previewBox.querySelectorAll('input').forEach(function(inp){
+      inp.addEventListener('change', function(){
+        var idx = parseInt(inp.dataset.idx, 10);
+        var v = parseInt(inp.value, 10);
+        if (isNaN(v) || v < 0){ alert('总件数必须为非负整数'); inp.value = state.items[idx].count; return; }
+        state.items[idx].count = v;
+      });
+    });
+  }
+
+  /* ========== 优化执行 ========== */
+  $('btnRun').addEventListener('click', runOptimize);
+
+  async function runOptimize(){
+    if (!state.items) return;
+    var wl = parseFloat($('inpWeight').value) || 27;
+    var vl = parseFloat($('inpVolume').value) || 64;
+    var rate = (parseFloat($('inpRate').value) || 99) / 100;
+    if (!(wl > 0) || !(vl > 0) || !(rate > 0 && rate <= 1)){
+      alert('请检查参数：重量/体积大于 0，满载率 1~100%');
+      return;
+    }
+
+    $('btnRun').disabled = true; $('btnDownload').disabled = true;
+    $('progressWrap').classList.add('show');
+    hideResult();
+
+    var gen = LangJiuBox.generatePriorityCombinations();
+    var combos = gen.combos, names = gen.names;
+    var schemes = [];
+    var best = null;
+
+    for (var i = 0; i < combos.length; i++){
+      $('barFill').style.width = ((i / combos.length) * 100) + '%';
+      $('progressPct').textContent = Math.round(i / combos.length * 100) + '%';
+      $('progressLabel').textContent = '方案 ' + (i+1) + '/' + combos.length + '：' + names[i];
+
+      var r = LangJiuBox.runOptimize(state.items, wl, vl, rate, combos[i]);
+      var remaining = r.avail.reduce(function(a,b){ return a+b; }, 0);
+      var totalWeight = r.results.reduce(function(s,x){ return s + x[2]; }, 0);
+      var totalVolume = r.results.reduce(function(s,x){ return s + x[3]; }, 0);
+      var scheme = {
+        combo: combos[i], name: names[i],
+        avail: r.avail, results: r.results,
+        remaining: remaining,
+        containers: r.results.length,
+        totalWeight: totalWeight,
+        totalVolume: totalVolume
+      };
+      schemes.push(scheme);
+      if (!best || remaining < best.remaining) best = scheme;
+      await nextFrame();
+    }
+
+    $('barFill').style.width = '100%';
+    $('progressPct').textContent = '100%';
+    $('progressLabel').textContent = '优化完成 ✓';
+    await new Promise(function(r){ setTimeout(r, 350); });
+
+    state.schemes = schemes;
+    state.best = best;
+    $('btnRun').disabled = false;
+    $('btnDownload').disabled = false;
+    renderResult(wl, vl, rate);
+    $('progressWrap').classList.remove('show');
+  }
+
+  function nextFrame(){ return new Promise(function(r){ setTimeout(r, 0); }); }
+
+  /* ========== 结果渲染 ========== */
+  function renderResult(wl, vl, rate){
+    var b = state.best;
+    var sumW = b.totalWeight, sumV = b.totalVolume;
+    var avgW = b.containers ? (sumW / (b.containers * wl)) * 100 : 0;
+    var avgV = b.containers ? (sumV / (b.containers * vl)) * 100 : 0;
+
+    $('summaryCards').innerHTML =
+      '<div class="sum-card best"><div class="k">🏆 最佳优先级方案</div><div class="v">' + esc(b.name) + '</div></div>' +
+      '<div class="sum-card"><div class="k">剩余货品</div><div class="v">' + fmt(b.remaining) + ' 件</div></div>' +
+      '<div class="sum-card"><div class="k">集装箱数量</div><div class="v">' + b.containers + ' 个</div></div>' +
+      '<div class="sum-card"><div class="k">总装载重量</div><div class="v">' + sumW.toFixed(2) + ' 吨</div></div>' +
+      '<div class="sum-card"><div class="k">总装载体积</div><div class="v">' + sumV.toFixed(2) + ' m³</div></div>' +
+      '<div class="sum-card"><div class="k">平均满载率</div><div class="v">' + avgW.toFixed(1) + '%</div></div>' +
+      '<div class="sum-card"><div class="k">平均体积利用率</div><div class="v">' + avgV.toFixed(1) + '%</div></div>';
+
+    renderBestTable(b, state.schemes, wl);
+    renderCompareTable(state.schemes, b);
+    renderRemainTable(b);
+    $('resultArea').classList.remove('hidden');
+  }
+
+  function renderBestTable(b, schemes, wl){
+    var rows = b.results.map(function(r, i){
+      var idx1 = r[0][0], cnt1 = r[0][1], idx2 = r[1][0], cnt2 = r[1][1];
+      var n1 = state.items[idx1].name;
+      var n2 = cnt2 > 0 ? state.items[idx2].name : '';
+      var wRate = (r[2] / wl) * 100;
+      return '<tr><td>' + (i+1) + '</td><td><b>' + esc(r[4]) + '</b></td>' +
+             '<td>' + esc(n1) + '</td><td class="num">' + fmt(cnt1) + '</td>' +
+             '<td>' + (cnt2 > 0 ? esc(n2) : '-') + '</td><td class="num">' + (cnt2 > 0 ? fmt(cnt2) : '-') + '</td>' +
+             '<td class="num">' + fmt(cnt1 + cnt2) + '</td>' +
+             '<td class="num">' + r[2].toFixed(2) + '</td><td class="num">' + r[3].toFixed(2) + '</td>' +
+             '<td class="num">' + Math.min(wRate, 100).toFixed(1) + '%</td></tr>';
+    });
+    $('tabBest').innerHTML = tableHtml('tabBest',
+      ['箱号','货品组合','主要货品','主要数量','次要货品','次要数量','总件数','总重量(吨)','总体积(m³)','满载率(%)'],
+      rows.join('')) + hintHtml('tabBest');
+  }
+
+  function renderCompareTable(schemes, best){
+    var rows = schemes.map(function(s, i){
+      var isBest = s.remaining === best.remaining;
+      return '<tr class="' + (isBest ? 'best-row' : '') + '"><td>' + (i+1) + '</td>' +
+             '<td>' + esc(s.name) + '</td><td class="num">' + s.containers + '</td>' +
+             '<td class="num">' + s.totalWeight.toFixed(2) + '</td>' +
+             '<td class="num"><b>' + fmt(s.remaining) + '</b></td>' +
+             '<td>' + (isBest ? '<span style="color:#16a34a;font-weight:700">✓ 最佳</span>' : '') + '</td></tr>';
+    });
+    $('tabCompare').innerHTML = tableHtml('tabCompare',
+      ['方案编号','优先级顺序（依次尝试）','集装箱数','总重量(吨)','剩余货品数','是否最佳'],
+      rows.join('')) + hintHtml('tabCompare');
+  }
+
+  function renderRemainTable(b){
+    var rows = b.results.reduce(function(loadedMap, r){
+      var pairs = [[r[0][0], r[0][1]], [r[1][0], r[1][1]]];
+      pairs.forEach(function(p){
+        if (p[1] > 0) loadedMap[p[0]] = (loadedMap[p[0]] || 0) + p[1];
+      });
+      return loadedMap;
+    }, {});
+    var rowsHtml = b.avail.map(function(av, i){
+      var p = state.items[i];
+      var loaded = (loadedMap[i] || 0);
+      var loadRate = p.count > 0 ? (loaded / p.count * 100) : 0;
+      return '<tr style="' + (loadedMap[i] ? '' : 'color:#e11d48;') + '"><td><b>' + esc(p.name) + '</b></td>' +
+             '<td class="num">' + fmt(p.count) + '</td><td class="num">' + fmt(loaded) + '</td>' +
+             '<td class="num">' + fmt(av) + '</td><td class="num">' + loadRate.toFixed(1) + '%</td>' +
+             '<td class="num">' + p.weight.toFixed(4) + '</td><td class="num">' + p.volume.toFixed(3) + '</td></tr>';
+    });
+    $('tabRemain').innerHTML = tableHtml('tabRemain',
+      ['货品名称','原始数量','装载数量','剩余数量','装载率(%)','单件重量(吨)','单件体积(m³)'],
+      rowsHtml.join('')) + hintHtml('tabRemain');
+  }
+
+  /* ========== 下载 Excel ========== */
+  $('btnDownload').addEventListener('click', function(){
+    if (!state.best) return;
+    try {
+      var wb = buildWorkbook();
+      var buf = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+      var blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '最佳装载结果_' + ts() + '.xlsx';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 300);
+    } catch(err){
+      alert('导出失败：' + err.message);
+    }
+  });
+
+  function buildWorkbook(){
+    var b = state.best;
+    var wl = parseFloat($('inpWeight').value) || 27;
+    var vl = parseFloat($('inpVolume').value) || 64;
+    var rate = (parseFloat($('inpRate').value) || 99);
+
+    // Sheet1 最佳装载方案
+    var bestRows = b.results.map(function(r, i){
+      var idx1 = r[0][0], cnt1 = r[0][1], idx2 = r[1][0], cnt2 = r[1][1];
+      var wRate = (r[2] / wl) * 100;
+      return {
+        '箱号': i + 1, '货品组合': r[4],
+        '主要货品': state.items[idx1].name, '主要货品数量': cnt1,
+        '次要货品': cnt2 > 0 ? state.items[idx2].name : '', '次要货品数量': cnt2 > 0 ? cnt2 : 0,
+        '总件数': cnt1 + cnt2,
+        '总重量(吨)': Math.round(r[2] * 100) / 100,
+        '总体积(m³)': Math.round(r[3] * 100) / 100,
+        '满载率(%)': Math.round(Math.min(wRate, 100) * 10) / 10
+      };
+    });
+
+    // Sheet2 剩余货品
+    var loadedMap = {};
+    b.results.forEach(function(r){
+      [[r[0][0], r[0][1]], [r[1][0], r[1][1]]].forEach(function(p){
+        if (p[1] > 0) loadedMap[p[0]] = (loadedMap[p[0]] || 0) + p[1];
+      });
+    });
+    var remainRows = b.avail.map(function(av, i){
+      var p = state.items[i];
+      var loaded = loadedMap[i] || 0;
+      return {
+        '货品名称': p.name, '原始数量': p.count,
+        '装载数量': loaded, '剩余数量': av,
+        '装载率(%)': p.count > 0 ? Math.round(loaded / p.count * 1000) / 10 : 0,
+        '单件重量(吨)': p.weight, '单件体积(m³)': p.volume
+      };
+    });
+
+    // Sheet3 汇总信息
+    var totalW = b.totalWeight, totalV = b.totalVolume;
+    var avgW = b.containers ? (totalW / (b.containers * wl)) * 100 : 0;
+    var avgV = b.containers ? (totalV / (b.containers * vl)) * 100 : 0;
+    var summaryRows = [
+      ['最佳优先级方案', b.name],
+      ['集装箱总数', b.containers],
+      ['总装载重量(吨)', Math.round(totalW * 100) / 100],
+      ['总装载体积(m³)', Math.round(totalV * 100) / 100],
+      ['重量限制(吨)', wl],
+      ['体积限制(m³)', vl],
+      ['满载率要求(%)', rate],
+      ['货品剩余合计', b.remaining],
+      ['平均满载率(%)', Math.round(avgW * 10) / 10],
+      ['平均体积利用率(%)', Math.round(avgV * 10) / 10]
+    ];
+
+    // Sheet4 所有方案对比
+    var compareRows = state.schemes.map(function(s, i){
+      return {
+        '方案编号': i + 1,
+        '优先级顺序': s.name,
+        '集装箱数量': s.containers,
+        '总装载重量(吨)': Math.round(s.totalWeight * 100) / 100,
+        '剩余货品数量': s.remaining,
+        '是否最佳': s.remaining === b.remaining ? '是' : ''
+      };
+    });
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bestRows), '最佳装载方案');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(remainRows), '剩余货品');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['项目','数值']].concat(summaryRows)), '汇总信息');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(compareRows), '所有方案对比');
+    [bestRows, remainRows, compareRows].forEach(function(rows, k){
+      var ws = wb.Sheets[wb.SheetNames[k]];
+      if (!rows.length) return;
+      var cols = Object.keys(rows[0]).map(function(c){ return { wch: Math.max(c.length * 2, 10) }; });
+      ws['!cols'] = cols;
+    });
+    return wb;
+  }
+
+  /* ========== 工具函数 ========== */
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+  function fmt(n){ return Number(n).toLocaleString('zh-CN'); }
+  function ts(){ var d = new Date(), p = function(x){ return String(x).padStart(2,'0'); };
+    return '' + d.getFullYear() + p(d.getMonth()+1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); }
+  function tableHtml(id, headers, body){
+    return '<div class="table-wrap"><table><thead><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') +
+           '</tr></thead><tbody>' + body + '</tbody></table></div>';
+  }
+  function hintHtml(tab){
+    var map = {
+      tabBest: '<div class="note info">📌 该表为最优方案的逐柜装货明细，「货品组合」为每柜的装载策略，满载率 = 柜重 / 重量限制。</div>',
+      tabCompare: '<div class="note info">📌 绿色行为剩余货品最少的方案（可能有多个并列）。最佳方案即输出到 Excel 的方案。</div>',
+      tabRemain: '<div class="note info">📌 红色行为完全未装车的货品；剩余件数用于确认需要追加的箱次或退回库存的货量。</div>'
+    };
+    return map[tab] || '';
+  }
+
+  function hideResult(){ $('resultArea').classList.add('hidden'); state.schemes = []; state.best = null; }
+
+  /* ========== Tab 切换 ========== */
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click', function(){
+      document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); });
+      document.querySelectorAll('.tab-panel').forEach(function(x){ x.classList.remove('active'); });
+      t.classList.add('active');
+      $(t.dataset.tab).classList.add('active');
+    });
+  });
+})();
+</script>
+</body>
+</html>
