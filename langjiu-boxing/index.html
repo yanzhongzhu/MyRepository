@@ -113,7 +113,7 @@
       <h1>🚢 郎酒水运装箱 · 集装箱装载优化</h1>
       <div class="sub">遍历 24 种优先级组合，自动选择剩余货品最少的装载方案</div>
     </div>
-    <span class="badge">Web 版 V1.1 · 新增装箱可视化预览</span>
+    <span class="badge">Web 版 V1.2 · 支持导出表格数据预览</span>
   </div>
 
   <!-- 参数设置 -->
@@ -176,10 +176,12 @@
         <div class="tab active" data-tab="tabBest">最佳装载方案</div>
         <div class="tab" data-tab="tabCompare">所有方案对比（24）</div>
         <div class="tab" data-tab="tabRemain">剩余货品统计</div>
+        <div class="tab" data-tab="tabExport">📄 导出表格预览（4 Sheet）</div>
       </div>
       <div class="tab-panel active" id="tabBest"></div>
       <div class="tab-panel" id="tabCompare"></div>
       <div class="tab-panel" id="tabRemain"></div>
+      <div class="tab-panel" id="tabExport"></div>
     </div>
   </div>
 
@@ -422,6 +424,7 @@
     renderCompareTable(state.schemes, b);
     renderRemainTable(b);
     renderVizPreview(b, wl, vl);
+    renderExportPreview();
     $('resultArea').classList.remove('hidden');
   }
 
@@ -561,6 +564,63 @@
       rowsHtml.join('')) + hintHtml('tabRemain');
   }
 
+  /* ========== 导出表格预览（与下载 Excel 完全一致） ========== */
+  function renderExportPreview(){
+    var b = state.best;
+    if (!b) return;
+
+    // 构建 4 个 Sheet 的数据（与 buildWorkbook 共用来源）
+    var data = buildExportData();
+    var html = '';
+
+    // Sheet1 最佳装载方案
+    html += exportSheetBlock('Sheet 1 · 最佳装载方案（' + data.bestRows.length + ' 行）',
+      ['箱号','货品组合','主要货品','主要货品数量','次要货品','次要货品数量','总件数','总重量(吨)','总体积(m³)','满载率(%)'],
+      data.bestRows.map(function(r){
+        return ['','','','','','','','','',''].map(function(_, idx){
+          var key = ['箱号','货品组合','主要货品','主要货品数量','次要货品','次要货品数量','总件数','总重量(吨)','总体积(m³)','满载率(%)'][idx];
+          return r[key];
+        });
+      }));
+
+    // Sheet2 剩余货品
+    html += exportSheetBlock('Sheet 2 · 剩余货品（' + data.remainRows.length + ' 行）',
+      ['货品名称','原始数量','装载数量','剩余数量','装载率(%)','单件重量(吨)','单件体积(m³)'],
+      data.remainRows.map(function(r){
+        return ['货品名称','原始数量','装载数量','剩余数量','装载率(%)','单件重量(吨)','单件体积(m³)'].map(function(key){ return r[key]; });
+      }));
+
+    // Sheet3 汇总信息
+    html += exportSheetBlock('Sheet 3 · 汇总信息（' + data.summaryRows.length + ' 行）',
+      ['项目','数值'], data.summaryRows);
+
+    // Sheet4 所有方案对比
+    html += exportSheetBlock('Sheet 4 · 所有方案对比（' + data.compareRows.length + ' 行）',
+      ['方案编号','优先级顺序','集装箱数量','总装载重量(吨)','剩余货品数量','是否最佳'],
+      data.compareRows.map(function(r){
+        return ['方案编号','优先级顺序','集装箱数量','总装载重量(吨)','剩余货品数量','是否最佳'].map(function(key){ return r[key]; });
+      }));
+
+    html += '<div class="note info">📌 以上 4 张表格与点击「📥 下载最佳结果 Excel」后生成的文件内容完全一致，先预览确认，再下载。</div>';
+
+    $('tabExport').innerHTML = html;
+  }
+
+  function exportSheetBlock(title, headers, rows){
+    var thead = '<thead><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr></thead>';
+    var tbody = rows.map(function(row, i){
+      return '<tr>' + headers.map(function(h, ci){
+        var v = row[ci] !== undefined ? row[ci] : row[h];
+        var cls = (ci > 0 && typeof v === 'number') ? ' class="num"' : '';
+        return '<td' + cls + '>' + (v === undefined || v === null || v === '' ? '−' : esc(v)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    return '<div style="margin-bottom:18px;">' +
+      '<div style="font-size:13px;font-weight:600;color:#1e40af;margin-bottom:8px;">' + esc(title) + '</div>' +
+      '<div class="table-wrap" style="max-height:260px;">' +
+      '<table style="font-size:12.5px;">' + thead + '<tbody>' + tbody + '</tbody></table></div></div>';
+  }
+
   /* ========== 下载 Excel ========== */
   $('btnDownload').addEventListener('click', function(){
     if (!state.best) return;
@@ -578,7 +638,8 @@
     }
   });
 
-  function buildWorkbook(){
+  /* ========== 导出数据构建（预览与下载共用） ========== */
+  function buildExportData(){
     var b = state.best;
     var wl = parseFloat($('inpWeight').value) || 27;
     var vl = parseFloat($('inpVolume').value) || 64;
@@ -645,6 +706,13 @@
         '是否最佳': s.remaining === b.remaining ? '是' : ''
       };
     });
+
+    return { bestRows: bestRows, remainRows: remainRows, summaryRows: summaryRows, compareRows: compareRows };
+  }
+
+  function buildWorkbook(){
+    var data = buildExportData();
+    var bestRows = data.bestRows, remainRows = data.remainRows, summaryRows = data.summaryRows, compareRows = data.compareRows;
 
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bestRows), '最佳装载方案');
